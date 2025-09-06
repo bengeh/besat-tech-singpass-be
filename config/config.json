@@ -1,5 +1,5 @@
 {
-  "CLIENT_ID": "umcxOcOg0RuWkuI8YP8vewfCB7KlZVv0",
+  "CLIENT_ID": "fpl0TiR1xaRthztnYKaJqL4pYljJ4qKU",
   "ISSUER_URL": "https://stg-id.singpass.gov.sg",
   "REDIRECT_URI": "https://beast-tech-be.onrender.com/callback",
   "SCOPES": "openid profile",
