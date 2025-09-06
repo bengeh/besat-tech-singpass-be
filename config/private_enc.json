@@ -1,0 +1,10 @@
+{
+    "kty": "EC",
+    "d": "WwFohwPsazCJgG1xBNVcYH-_ElIjqXISHa7-INbXgR4",
+    "use": "enc",
+    "crv": "P-256",
+    "kid": "my-enc-key",
+    "x": "_FxmcYK6O2FhehdhzLQs_oTvIhiVcRuUyIx2OpbRCfY",
+    "y": "l1tU_sk9km-nL03xx53P2zaFa2eR-W4G-4P1AokRH8U",
+    "alg": "ECDH-ES+A256KW"
+}

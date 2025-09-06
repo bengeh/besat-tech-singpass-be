@@ -1,0 +1,11 @@
+{
+  "CLIENT_ID": "umcxOcOg0RuWkuI8YP8vewfCB7KlZVv0",
+  "ISSUER_URL": "https://stg-id.singpass.gov.sg",
+  "REDIRECT_URI": "http://localhost:8080/callback",
+  "SCOPES": "openid profile",
+  "KEYS": {
+    "PRIVATE_SIG_KEY": "./config/private_sig.json",
+    "PRIVATE_ENC_KEY": "./config/private_enc.json",
+    "PUBLIC_JWKS": "./config/public_jwks.json"
+  }
+}
