@@ -1,10 +1,10 @@
 package main
 
 import (
-	"log"
-
 	"beast-tech-singpass-be/config"
 	"beast-tech-singpass-be/handlers"
+	"log"
+	"net/http"
 
 	"github.com/gin-contrib/sessions"
 	"github.com/gin-contrib/sessions/cookie"
@@ -19,6 +19,13 @@ func main() {
 
 	r := gin.Default()
 	store := cookie.NewStore([]byte("super-secret-long-random-key-here"))
+	store.Options(sessions.Options{
+		Path:     "/",
+		MaxAge:   3600,
+		HttpOnly: true,
+		Secure:   true, // required if SameSite=None
+		SameSite: http.SameSiteNoneMode,
+	})
 	// Attach session middleware
 	r.Use(sessions.Sessions("singpass-session", store))
 
