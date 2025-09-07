@@ -204,6 +204,7 @@ func (h *SingpassHandler) createClientAssertion(ctx context.Context) (string, er
 // Callback handler: exchange code for tokens using client_assertion and code_verifier
 func (h *SingpassHandler) Callback(c *gin.Context) {
 	session := sessions.Default(c)
+	fmt.Printf("session: %v\n", session)
 	raw := session.Get("singpass_auth")
 	if raw == nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "no session"})
