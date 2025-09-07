@@ -29,11 +29,11 @@ func main() {
 	// Configure session cookie for production (Render uses HTTPS)
 	store.Options(sessions.Options{
 		Path:     "/",
-		Domain:   "beast-tech-be.onrender.com", // 👈 must match your backend domain
-		MaxAge:   3600,                         // 1 hour
-		HttpOnly: true,                         // JS can’t access cookie
-		Secure:   true,                         // required for HTTPS
-		SameSite: http.SameSiteNoneMode,        // allow cross-site OAuth redirects
+		Domain:   "",                   // 👈 must match your backend domain
+		MaxAge:   3600,                 // 1 hour
+		HttpOnly: true,                 // JS can’t access cookie
+		Secure:   false,                // required for HTTPS
+		SameSite: http.SameSiteLaxMode, // allow cross-site OAuth redirects
 	})
 
 	// Attach session middleware
