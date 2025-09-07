@@ -2,6 +2,7 @@ package main
 
 import (
 	"log"
+	"net/http"
 
 	"beast-tech-singpass-be/config"
 	"beast-tech-singpass-be/handlers"
@@ -23,7 +24,19 @@ func main() {
 	}
 
 	r := gin.Default()
-	store := cookie.NewStore([]byte("super-secret-session-key"))
+	store := cookie.NewStore([]byte("super-secret-long-random-key-here"))
+
+	// Configure session cookie for production (Render uses HTTPS)
+	store.Options(sessions.Options{
+		Path:     "/",
+		Domain:   "beast-tech-be.onrender.com", // 👈 must match your backend domain
+		MaxAge:   3600,                         // 1 hour
+		HttpOnly: true,                         // JS can’t access cookie
+		Secure:   true,                         // required for HTTPS
+		SameSite: http.SameSiteNoneMode,        // allow cross-site OAuth redirects
+	})
+
+	// Attach session middleware
 	r.Use(sessions.Sessions("singpass-session", store))
 
 	// routes
