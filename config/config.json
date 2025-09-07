@@ -2,7 +2,7 @@
   "CLIENT_ID": "fpl0TiR1xaRthztnYKaJqL4pYljJ4qKU",
   "ISSUER_URL": "https://stg-id.singpass.gov.sg",
   "REDIRECT_URI": "https://beast-tech-be.onrender.com/callback",
-  "SCOPES": "openid profile",
+  "SCOPES": "openid uinfin",
   "KEYS": {
     "PRIVATE_SIG_KEY": "./config/private_sig.json",
     "PRIVATE_ENC_KEY": "./config/private_enc.json",
