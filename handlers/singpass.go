@@ -203,6 +203,11 @@ func (h *SingpassHandler) createClientAssertion(ctx context.Context) (string, er
 
 // Callback handler: exchange code for tokens using client_assertion and code_verifier
 func (h *SingpassHandler) Callback(c *gin.Context) {
+	cookies := c.Request.Cookies()
+	for _, ck := range cookies {
+		fmt.Printf("cookie in callback: %s=%s\n", ck.Name, ck.Value)
+	}
+
 	session := sessions.Default(c)
 	fmt.Printf("session: %v\n", session)
 	raw := session.Get("singpass_auth")
