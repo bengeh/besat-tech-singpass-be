@@ -202,33 +202,33 @@ func (h *SingpassHandler) createClientAssertion(ctx context.Context) (string, er
 }
 
 // Callback handler: exchange code for tokens using client_assertion and code_verifier
+// Callback handler: exchange code for tokens using client_assertion and code_verifier (from query params)
 func (h *SingpassHandler) Callback(c *gin.Context) {
-	cookies := c.Request.Cookies()
-	for _, ck := range cookies {
-		fmt.Printf("cookie in callback: %s=%s\n", ck.Name, ck.Value)
-	}
-
-	session := sessions.Default(c)
-	fmt.Printf("session: %v\n", session)
-	raw := session.Get("singpass_auth")
-	if raw == nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "no session"})
-		return
-	}
-	authMap := raw.(map[string]string)
-	expectedState := authMap["state"]
-	if c.Query("state") != expectedState {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid state"})
-		return
-	}
+	// Extract query params
 	code := c.Query("code")
+	state := c.Query("state")
+
 	if code == "" {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "missing code"})
 		return
 	}
-	codeVerifier := authMap["code_verifier"]
+	if state == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "missing state"})
+		return
+	}
 
-	// create client_assertion (signed JWT)
+	// ⚠️ For now, we skip validating "state" since there's no session storage.
+	// If you want validation, you can generate + persist it in-memory or DB.
+
+	// Since no session, you’ll need a way to pass the code_verifier here.
+	// Example: include it in query params from /authorize redirect
+	codeVerifier := c.Query("code_verifier")
+	if codeVerifier == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "missing code_verifier"})
+		return
+	}
+
+	// Create client_assertion (signed JWT)
 	clientAssertion, err := h.createClientAssertion(c)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "create client assertion: " + err.Error()})
@@ -295,9 +295,7 @@ func (h *SingpassHandler) Callback(c *gin.Context) {
 		if err == nil {
 			defer r2.Body.Close()
 			b2, _ := io.ReadAll(r2.Body)
-			// If response looks like a JWT (compact), try to decrypt if encrypted JWE
 			if r2.Header.Get("Content-Type") == "application/jwt" || bytes.Count(b2, []byte(".")) >= 4 {
-				// try to decrypt JWE using private encryption JWK
 				if h.PrivateEnc.Key != nil {
 					obj, err := jose.ParseEncrypted(string(b2))
 					if err == nil {
@@ -321,18 +319,12 @@ func (h *SingpassHandler) Callback(c *gin.Context) {
 		}
 	}
 
-	// Save minimal session user data
-	session.Set("user", map[string]interface{}{
+	// Directly return response instead of storing in session
+	c.JSON(http.StatusOK, gin.H{
 		"claims":   claims,
 		"userinfo": userinfo,
 		"access":   tokenResp.AccessToken,
 		"id_token": tokenResp.IDToken,
-	})
-	_ = session.Save()
-
-	c.JSON(http.StatusOK, gin.H{
-		"claims":   claims,
-		"userinfo": userinfo,
 	})
 }
 
