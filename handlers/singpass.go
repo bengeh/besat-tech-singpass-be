@@ -222,11 +222,11 @@ func (h *SingpassHandler) Callback(c *gin.Context) {
 
 	// Since no session, you’ll need a way to pass the code_verifier here.
 	// Example: include it in query params from /authorize redirect
-	codeVerifier := c.Query("code_verifier")
-	if codeVerifier == "" {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "missing code_verifier"})
-		return
-	}
+	// codeVerifier := c.Query("code_verifier")
+	// if codeVerifier == "" {
+	// 	c.JSON(http.StatusBadRequest, gin.H{"error": "missing code_verifier"})
+	// 	return
+	// }
 
 	// Create client_assertion (signed JWT)
 	clientAssertion, err := h.createClientAssertion(c)
@@ -241,7 +241,7 @@ func (h *SingpassHandler) Callback(c *gin.Context) {
 	form.Set("code", code)
 	form.Set("redirect_uri", h.Config.RedirectURI)
 	form.Set("client_id", h.Config.ClientID)
-	form.Set("code_verifier", codeVerifier)
+	// form.Set("code_verifier", codeVerifier)
 	form.Set("client_assertion_type", "urn:ietf:params:oauth:client-assertion-type:jwt-bearer")
 	form.Set("client_assertion", clientAssertion)
 
