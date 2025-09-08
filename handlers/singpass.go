@@ -120,28 +120,38 @@ func generateRandomString(n int) (string, error) {
 }
 
 // BuildAuthURL builds authorization URL with PKCE S256, nonce, state
-func (h *SingpassHandler) BuildAuthURL(c *gin.Context) (authURL string, codeVerifier string, state string, nonce string, err error) {
-	codeVerifier, err = generateCodeVerifier() // replace with secure crypto/rand
+func (h *SingpassHandler) BuildAuthURL(c *gin.Context) (authURL string, state string, nonce string, err error) {
+	codeVerifier, err := generateCodeVerifier()
+	if err != nil {
+		return "", "", "", err
+	}
+
 	sum := sha256.Sum256([]byte(codeVerifier))
 	codeChallenge := base64URLEncodeNoPad(sum[:])
 
 	// generate state & nonce securely in production
-	state, err = generateRandomString(32)
+	randomState, err := generateRandomString(16)
 	if err != nil {
-		return "", "", "", "", err
+		return "", "", "", err
 	}
-
 	nonce, err = generateRandomString(32)
 	if err != nil {
-		return "", "", "", "", err
+		return "", "", "", err
 	}
 
-	redirectURI := fmt.Sprintf("%s?code_verifier=%s", h.Config.RedirectURI, codeVerifier)
+	// 👇 embed both state and code_verifier into one base64 JSON
+	stateData := map[string]string{
+		"state":         randomState,
+		"code_verifier": codeVerifier,
+	}
+	jsonBytes, _ := json.Marshal(stateData)
+	state = base64.RawURLEncoding.EncodeToString(jsonBytes)
 
+	// build auth URL
 	q := url.Values{}
 	q.Set("response_type", "code")
 	q.Set("client_id", h.Config.ClientID)
-	q.Set("redirect_uri", redirectURI)
+	q.Set("redirect_uri", h.Config.RedirectURI)
 	q.Set("scope", h.Config.Scopes)
 	q.Set("state", state)
 	q.Set("nonce", nonce)
@@ -149,21 +159,20 @@ func (h *SingpassHandler) BuildAuthURL(c *gin.Context) (authURL string, codeVeri
 	q.Set("code_challenge_method", "S256")
 
 	authURL = fmt.Sprintf("%s?%s", h.AuthEndpoint, q.Encode())
-	return
+	return authURL, state, nonce, nil
 }
 
 // Login handler: build URL, store code_verifier/state/nonce in session, redirect
 func (h *SingpassHandler) Login(c *gin.Context) {
-	authURL, codeVerifier, state, nonce, err := h.BuildAuthURL(c)
+	authURL, state, nonce, err := h.BuildAuthURL(c)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
 	session := sessions.Default(c)
 	session.Set("singpass_auth", map[string]string{
-		"code_verifier": codeVerifier,
-		"state":         state,
-		"nonce":         nonce,
+		"state": state,
+		"nonce": nonce,
 	})
 	_ = session.Save()
 	c.Redirect(http.StatusFound, authURL)
@@ -204,33 +213,38 @@ func (h *SingpassHandler) createClientAssertion(ctx context.Context) (string, er
 }
 
 // Callback handler: exchange code for tokens using client_assertion and code_verifier
-// Callback handler: exchange code for tokens using client_assertion and code_verifier (from query params)
 func (h *SingpassHandler) Callback(c *gin.Context) {
-	// Extract query params
+	stateParam := c.Query("state")
 	code := c.Query("code")
-	state := c.Query("state")
-
 	if code == "" {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "missing code"})
 		return
 	}
-	if state == "" {
+	if stateParam == "" {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "missing state"})
 		return
 	}
 
-	// ⚠️ For now, we skip validating "state" since there's no session storage.
-	// If you want validation, you can generate + persist it in-memory or DB.
-
-	// Since no session, you’ll need a way to pass the code_verifier here.
-	// Example: include it in query params from /authorize redirect
-	codeVerifier := c.Query("code_verifier")
-	if codeVerifier == "" {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "missing code_verifier"})
+	// decode state back into map
+	decoded, err := base64.RawURLEncoding.DecodeString(stateParam)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid state encoding"})
 		return
 	}
 
-	// Create client_assertion (signed JWT)
+	var stateData map[string]string
+	if err := json.Unmarshal(decoded, &stateData); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid state JSON"})
+		return
+	}
+
+	codeVerifier := stateData["code_verifier"]
+	if codeVerifier == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "missing code_verifier in state"})
+		return
+	}
+
+	// create client_assertion (signed JWT)
 	clientAssertion, err := h.createClientAssertion(c)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "create client assertion: " + err.Error()})
@@ -297,7 +311,9 @@ func (h *SingpassHandler) Callback(c *gin.Context) {
 		if err == nil {
 			defer r2.Body.Close()
 			b2, _ := io.ReadAll(r2.Body)
+			// If response looks like a JWT (compact), try to decrypt if encrypted JWE
 			if r2.Header.Get("Content-Type") == "application/jwt" || bytes.Count(b2, []byte(".")) >= 4 {
+				// try to decrypt JWE using private encryption JWK
 				if h.PrivateEnc.Key != nil {
 					obj, err := jose.ParseEncrypted(string(b2))
 					if err == nil {
@@ -321,12 +337,18 @@ func (h *SingpassHandler) Callback(c *gin.Context) {
 		}
 	}
 
-	// Directly return response instead of storing in session
+	// Save minimal session user data
+	// session.Set("user", map[string]interface{}{
+	// 	"claims":   claims,
+	// 	"userinfo": userinfo,
+	// 	"access":   tokenResp.AccessToken,
+	// 	"id_token": tokenResp.IDToken,
+	// })
+	// _ = session.Save()
+
 	c.JSON(http.StatusOK, gin.H{
 		"claims":   claims,
 		"userinfo": userinfo,
-		"access":   tokenResp.AccessToken,
-		"id_token": tokenResp.IDToken,
 	})
 }
 
