@@ -5,6 +5,7 @@ import (
 	"beast-tech-singpass-be/handlers"
 	"log"
 	"net/http"
+	"os"
 
 	"github.com/gin-contrib/sessions"
 	"github.com/gin-contrib/sessions/cookie"
@@ -18,6 +19,11 @@ func main() {
 	}
 
 	r := gin.Default()
+	sessionSecret := os.Getenv("SESSION_SECRET")
+	if sessionSecret == "" {
+		log.Println("WARNING: SESSION_SECRET not set, using dev fallback (do NOT use in prod)")
+		sessionSecret = "dev-fallback-please-change"
+	}
 	store := cookie.NewStore([]byte("super-secret-long-random-key-here"))
 	store.Options(sessions.Options{
 		Path:     "/",
