@@ -24,7 +24,7 @@ func main() {
 		log.Println("WARNING: SESSION_SECRET not set, using dev fallback (do NOT use in prod)")
 		sessionSecret = "dev-fallback-please-change"
 	}
-	store := cookie.NewStore([]byte("super-secret-long-random-key-here"))
+	store := cookie.NewStore([]byte(sessionSecret))
 	store.Options(sessions.Options{
 		Path:     "/",
 		MaxAge:   3600,
