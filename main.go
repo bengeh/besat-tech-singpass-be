@@ -45,6 +45,7 @@ func main() {
 	r.GET("/login", handler.Login)
 	r.GET("/callback", handler.Callback)
 	r.GET("/userinfo", handler.Userinfo)
+	r.POST("/decrypt", handler.DecryptJWEHandler)
 
 	log.Printf("listening :8080")
 	if err := r.Run(":8080"); err != nil {

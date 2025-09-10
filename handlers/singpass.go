@@ -338,3 +338,57 @@ func (h *SingpassHandler) Userinfo(c *gin.Context) {
 func (h *SingpassHandler) JWKS(c *gin.Context) {
 	c.JSON(http.StatusOK, h.PublicJWKS)
 }
+
+func (h *SingpassHandler) DecryptJWEHandler(c *gin.Context) {
+	var req struct {
+		Token string `json:"token"`
+	}
+	if err := c.BindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid request"})
+		return
+	}
+
+	// Parse incoming JWE
+	jwe, err := jose.ParseEncrypted(req.Token)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid JWE", "detail": err.Error()})
+		return
+	}
+
+	// Decrypt JWE using your private key
+	decrypted, err := jwe.Decrypt(h.PrivateEnc.Key)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to decrypt JWE", "detail": err.Error()})
+		return
+	}
+
+	// The decrypted payload should be a compact JWS string
+	jwsCompact := string(decrypted)
+
+	// Verify the JWS using OIDC verifier
+	if h.Verifier == nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "verifier not configured"})
+		return
+	}
+
+	idTok, err := h.Verifier.Verify(context.Background(), jwsCompact)
+	if err != nil {
+		c.JSON(http.StatusUnauthorized, gin.H{
+			"error":  "invalid JWS (OIDC verify failed)",
+			"detail": err.Error(),
+		})
+		return
+	}
+
+	// Extract claims
+	var claims map[string]interface{}
+	if err := idTok.Claims(&claims); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to parse JWS claims", "detail": err.Error()})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"verified_by": "oidc.Verifier",
+		"claims":      claims,
+	})
+}
