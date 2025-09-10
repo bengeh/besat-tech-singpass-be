@@ -14,13 +14,16 @@ import (
 
 	"crypto/rand"
 
+	"beast-tech-singpass-be/config"
+	"beast-tech-singpass-be/helpers"
+
 	"github.com/coreos/go-oidc/v3/oidc"
 	"github.com/gin-contrib/sessions"
 	"github.com/gin-gonic/gin"
+	"github.com/lestrrat-go/jwx/v2/jwa"
+	"github.com/lestrrat-go/jwx/v2/jwe"
+	"github.com/lestrrat-go/jwx/v2/jws"
 	jose "github.com/square/go-jose/v3"
-
-	"beast-tech-singpass-be/config"
-	"beast-tech-singpass-be/helpers"
 )
 
 // SingpassHandler holds runtime data
@@ -34,6 +37,9 @@ type SingpassHandler struct {
 	AuthEndpoint     string
 	TokenEndpoint    string
 	UserinfoEndpoint string
+
+	// Keys
+	PublicJWS jose.JSONWebKey
 }
 
 // NewSingpassHandler creates and initializes discovery and verifiers
@@ -390,5 +396,46 @@ func (h *SingpassHandler) DecryptJWEHandler(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{
 		"verified_by": "oidc.Verifier",
 		"claims":      claims,
+	})
+}
+
+func (h *SingpassHandler) UserinfoJWEHandler(c *gin.Context) {
+	var body struct {
+		Token string `json:"token"`
+	}
+	if err := c.BindJSON(&body); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "missing token"})
+		return
+	}
+	jweToken := body.Token
+
+	// Cast algorithm string from config into jwa.KeyAlgorithm
+	// Decrypt outer JWE -> inner JWS
+	alg := jwa.KeyAlgorithmFrom(h.PrivateEnc.Algorithm)
+
+	decrypted, err := jwe.Decrypt(
+		[]byte(jweToken),
+		jwe.WithKey(alg, h.PrivateEnc.Key),
+	)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "failed to decrypt JWE", "detail": err.Error()})
+		return
+	}
+
+	// Verify inner JWS using your public signature key
+	verified, err := jws.Verify(decrypted, jws.WithKey(jwa.ES256, h.PublicJWS.Key))
+	if err != nil {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "failed to verify JWS", "detail": err.Error()})
+		return
+	}
+
+	var claims map[string]interface{}
+	if err := json.Unmarshal(verified, &claims); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "invalid JSON payload", "detail": err.Error()})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"claims": claims,
 	})
 }
