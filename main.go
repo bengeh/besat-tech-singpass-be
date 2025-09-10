@@ -44,6 +44,7 @@ func main() {
 	r.GET("/.well-known/jwks.json", handler.JWKS)
 	r.GET("/login", handler.Login)
 	r.GET("/callback", handler.Callback)
+	r.GET("/userinfo", handler.Userinfo)
 
 	log.Printf("listening :8080")
 	if err := r.Run(":8080"); err != nil {

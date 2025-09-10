@@ -1,7 +1,6 @@
 package handlers
 
 import (
-	"bytes"
 	"context"
 	"crypto/sha256"
 	"encoding/base64"
@@ -216,22 +215,16 @@ func (h *SingpassHandler) createClientAssertion(ctx context.Context) (string, er
 func (h *SingpassHandler) Callback(c *gin.Context) {
 	stateParam := c.Query("state")
 	code := c.Query("code")
-	if code == "" {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "missing code"})
-		return
-	}
-	if stateParam == "" {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "missing state"})
+	if code == "" || stateParam == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "missing code or state"})
 		return
 	}
 
-	// decode state back into map
 	decoded, err := base64.RawURLEncoding.DecodeString(stateParam)
 	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid state encoding"})
 		return
 	}
-
 	var stateData map[string]string
 	if err := json.Unmarshal(decoded, &stateData); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid state JSON"})
@@ -244,14 +237,13 @@ func (h *SingpassHandler) Callback(c *gin.Context) {
 		return
 	}
 
-	// create client_assertion (signed JWT)
 	clientAssertion, err := h.createClientAssertion(c)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "create client assertion: " + err.Error()})
 		return
 	}
 
-	// Token request form
+	// Token request
 	form := url.Values{}
 	form.Set("grant_type", "authorization_code")
 	form.Set("code", code)
@@ -270,8 +262,8 @@ func (h *SingpassHandler) Callback(c *gin.Context) {
 		return
 	}
 	defer resp.Body.Close()
-	body, _ := io.ReadAll(resp.Body)
 
+	body, _ := io.ReadAll(resp.Body)
 	if resp.StatusCode != 200 {
 		c.JSON(resp.StatusCode, gin.H{"error": "token endpoint error", "body": string(body)})
 		return
@@ -289,7 +281,7 @@ func (h *SingpassHandler) Callback(c *gin.Context) {
 		return
 	}
 
-	// Validate ID Token
+	// Verify ID token
 	ctx := context.Background()
 	idToken, err := h.Verifier.Verify(ctx, tokenResp.IDToken)
 	if err != nil {
@@ -302,57 +294,44 @@ func (h *SingpassHandler) Callback(c *gin.Context) {
 		return
 	}
 
-	fmt.Printf("ID Token claims: %+v\n", claims)
-	fmt.Printf("Access Token: %s\n", tokenResp.AccessToken)
-	fmt.Printf("this is the user info endpoint... %s\n", h.UserinfoEndpoint)
-	// Fetch userinfo endpoint (if present)
-	var userinfo interface{}
-	if h.UserinfoEndpoint != "" && tokenResp.AccessToken != "" {
-		req2, _ := http.NewRequest("GET", h.UserinfoEndpoint, nil)
-		req2.Header.Set("Authorization", "Bearer "+tokenResp.AccessToken)
-		r2, err := client.Do(req2)
-		if err == nil {
-			defer r2.Body.Close()
-			b2, _ := io.ReadAll(r2.Body)
-			// If response looks like a JWT (compact), try to decrypt if encrypted JWE
-			if r2.Header.Get("Content-Type") == "application/jwt" || bytes.Count(b2, []byte(".")) >= 4 {
-				// try to decrypt JWE using private encryption JWK
-				if h.PrivateEnc.Key != nil {
-					obj, err := jose.ParseEncrypted(string(b2))
-					if err == nil {
-						decrypted, derr := obj.Decrypt(h.PrivateEnc.Key)
-						if derr == nil {
-							var u map[string]interface{}
-							_ = json.Unmarshal(decrypted, &u)
-							userinfo = u
-						} else {
-							userinfo = string(decrypted) // fallback
-						}
-					} else {
-						userinfo = string(b2)
-					}
-				} else {
-					userinfo = string(b2)
-				}
-			} else {
-				_ = json.Unmarshal(b2, &userinfo)
-			}
-		}
+	// Return tokens so frontend can decide when to call /userinfo
+	c.JSON(http.StatusOK, gin.H{
+		"claims":       claims,
+		"access_token": tokenResp.AccessToken,
+		"id_token":     tokenResp.IDToken,
+	})
+}
+
+func (h *SingpassHandler) Userinfo(c *gin.Context) {
+	accessToken := c.GetHeader("Authorization")
+	if accessToken == "" {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "missing Authorization header"})
+		return
 	}
 
-	// Save minimal session user data
-	// session.Set("user", map[string]interface{}{
-	// 	"claims":   claims,
-	// 	"userinfo": userinfo,
-	// 	"access":   tokenResp.AccessToken,
-	// 	"id_token": tokenResp.IDToken,
-	// })
-	// _ = session.Save()
+	req, _ := http.NewRequest("GET", h.UserinfoEndpoint, nil)
+	req.Header.Set("Authorization", accessToken)
+	client := &http.Client{Timeout: 15 * time.Second}
+	resp, err := client.Do(req)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "userinfo request failed: " + err.Error()})
+		return
+	}
+	defer resp.Body.Close()
 
-	c.JSON(http.StatusOK, gin.H{
-		"claims":   claims,
-		"userinfo": userinfo,
-	})
+	body, _ := io.ReadAll(resp.Body)
+	if resp.StatusCode != 200 {
+		c.JSON(resp.StatusCode, gin.H{"error": "userinfo endpoint error", "body": string(body)})
+		return
+	}
+
+	var userinfo interface{}
+	if err := json.Unmarshal(body, &userinfo); err != nil {
+		// fallback: raw string if not JSON
+		userinfo = string(body)
+	}
+
+	c.JSON(http.StatusOK, userinfo)
 }
 
 // JWKS endpoint serve your public jwks (so Singpass can fetch)
