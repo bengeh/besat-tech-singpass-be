@@ -302,6 +302,9 @@ func (h *SingpassHandler) Callback(c *gin.Context) {
 		return
 	}
 
+	fmt.Printf("ID Token claims: %+v\n", claims)
+	fmt.Printf("Access Token: %s\n", tokenResp.AccessToken)
+	fmt.Printf("this is the user info endpoint... %s\n", h.UserinfoEndpoint)
 	// Fetch userinfo endpoint (if present)
 	var userinfo interface{}
 	if h.UserinfoEndpoint != "" && tokenResp.AccessToken != "" {
