@@ -21,7 +21,6 @@ import (
 	"github.com/gin-contrib/sessions"
 	"github.com/gin-gonic/gin"
 	"github.com/lestrrat-go/jwx/v2/jwa"
-	"github.com/lestrrat-go/jwx/v2/jwe"
 	"github.com/lestrrat-go/jwx/v2/jws"
 	jose "github.com/square/go-jose/v3"
 )
@@ -399,7 +398,7 @@ func (h *SingpassHandler) DecryptJWEHandler(c *gin.Context) {
 	})
 }
 
-func (h *SingpassHandler) UserinfoJWEHandler(c *gin.Context) {
+func (h *SingpassHandler) UserinfoJWSHandler(c *gin.Context) {
 	var body struct {
 		Token string `json:"token"`
 	}
@@ -407,27 +406,14 @@ func (h *SingpassHandler) UserinfoJWEHandler(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "missing token"})
 		return
 	}
-	jweToken := strings.TrimSpace(body.Token)
-
-	if jweToken == "" {
+	token := strings.TrimSpace(body.Token)
+	if token == "" {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "empty token"})
 		return
 	}
 
-	fmt.Printf("Incoming JWE: %s", jweToken)
-
-	// Decrypt outer JWE -> inner JWS
-	decrypted, err := jwe.Decrypt(
-		[]byte(jweToken),
-		jwe.WithKey(jwa.ECDH_ES, h.PrivateEnc.Key), // or jwa.RSA_OAEP_256 depending on Singpass
-	)
-	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "failed to decrypt JWE", "detail": err.Error()})
-		return
-	}
-
-	// Verify inner JWS using your public signature key
-	verified, err := jws.Verify(decrypted, jws.WithKey(jwa.ES256, h.PublicJWS.Key))
+	// Verify JWS
+	verified, err := jws.Verify([]byte(token), jws.WithKey(jwa.ES256, h.PublicJWS.Key))
 	if err != nil {
 		c.JSON(http.StatusUnauthorized, gin.H{"error": "failed to verify JWS", "detail": err.Error()})
 		return
