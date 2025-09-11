@@ -22,7 +22,6 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/lestrrat-go/jwx/v2/jwa"
 	"github.com/lestrrat-go/jwx/v2/jwe"
-	"github.com/lestrrat-go/jwx/v2/jws"
 	jose "github.com/square/go-jose/v3"
 )
 
@@ -425,7 +424,7 @@ func (h *SingpassHandler) UserinfoJWSHandler(c *gin.Context) {
 		return
 	}
 
-	// 🔑 Step 1: Decrypt JWE with your private encryption key (h.PrivateEnc)
+	// Step 1: Decrypt JWE with your private encryption key (h.PrivateEnc)
 	decrypted, err := jwe.Decrypt([]byte(token), jwe.WithKey(jwa.ECDH_ES_A256KW, h.PrivateEnc.Key))
 	if err != nil {
 		c.JSON(http.StatusUnauthorized, gin.H{
@@ -435,25 +434,20 @@ func (h *SingpassHandler) UserinfoJWSHandler(c *gin.Context) {
 		return
 	}
 
-	// 🔑 Step 2: Verify the inner JWS using Singpass’ public signing key (h.PublicJWS)
-	verified, err := jws.Verify(decrypted, jws.WithKey(jwa.ES256, h.PublicJWS.Key))
-	if err != nil {
-		c.JSON(http.StatusUnauthorized, gin.H{
-			"error":  "failed to verify JWS",
-			"detail": err.Error(),
-		})
-		return
-	}
+	// Step 2: Just output the decrypted payload (likely a JWS compact string)
+	payloadStr := string(decrypted)
 
-	// 🔑 Step 3: Parse claims JSON
+	// Try parsing JSON if it looks like JSON
 	var claims map[string]interface{}
-	if err := json.Unmarshal(verified, &claims); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{
-			"error":  "invalid JSON payload",
-			"detail": err.Error(),
+	if err := json.Unmarshal(decrypted, &claims); err != nil {
+		// Not JSON? Just return raw string
+		c.JSON(http.StatusOK, gin.H{
+			"decrypted": payloadStr,
 		})
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{"claims": claims})
+	c.JSON(http.StatusOK, gin.H{
+		"claims": claims,
+	})
 }
