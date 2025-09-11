@@ -5,8 +5,8 @@
             "use": "sig",
             "crv": "P-256",
             "kid": "alias/stg-sp-auth-api-id-token-signing-key-kms-asymmetric-key-alias",
-            "x": "UR8n58KiO1zcLQlYtNnGU3Kx9N2isIykELzXpjJLNYM",
-            "y": "SNLnI9NF5NwKm-C8sg9Yv84r5GilM1DW054krbRdAJ4",
+            "x": "3776DWqcWgNljKxLohoQEKD4y0himOQ4P4O-XMhVXTE",
+            "y": "E75axFqgk8TeKszyyFsuLuBbk8HfxhJ0fBIoZRXDXuI",
             "alg": "ES256"
         },
         {
