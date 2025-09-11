@@ -47,24 +47,35 @@ func NewSingpassHandler(cfg config.Config) (*SingpassHandler, error) {
 	s := &SingpassHandler{Config: cfg}
 
 	// Load private signing key
-	sig, err := helpers.LoadPrivateJWKFromFile(cfg.Keys.PrivateSigPath)
+	sig, err := helpers.LoadJWKFromFile(cfg.Keys.PrivateSigPath)
 	if err != nil {
-		return nil, fmt.Errorf("load sig key: %w", err)
+		return nil, fmt.Errorf("load private signing key: %w", err)
 	}
 	s.PrivateSig = sig
 
 	// Load private encryption key (optional)
-	enc, err := helpers.LoadPrivateJWKFromFile(cfg.Keys.PrivateEncPath)
+	enc, err := helpers.LoadJWKFromFile(cfg.Keys.PrivateEncPath)
 	if err == nil {
 		s.PrivateEnc = enc
 	}
 
-	// Load public signing key from Singpass JWKS URL
-	pub, err := helpers.LoadPublicJWSFromURL(cfg.IssuerURL + "/.well-known/jwks.json")
+	// Load public JWKS from local file
+	pub, err := helpers.LoadJWKSetFromFile(cfg.Keys.PublicJwksPath)
 	if err != nil {
-		return nil, fmt.Errorf("load public JWS key: %w", err)
+		return nil, fmt.Errorf("load public jwks: %w", err)
 	}
-	s.PublicJWS = pub
+	s.PublicJWKS = pub
+
+	// Pick the signing key from JWKS
+	for _, k := range pub.Keys {
+		if k.Use == "sig" {
+			s.PublicJWS = k
+			break
+		}
+	}
+	if s.PublicJWS.Key == nil {
+		return nil, fmt.Errorf("no signing key found in public JWKS")
+	}
 
 	// Discover provider & endpoints
 	ctx := context.Background()
@@ -74,6 +85,7 @@ func NewSingpassHandler(cfg config.Config) (*SingpassHandler, error) {
 	}
 	s.Provider = provider
 
+	// Get endpoints from provider metadata
 	var meta map[string]interface{}
 	if err := provider.Claims(&meta); err == nil {
 		if auth, ok := meta["authorization_endpoint"].(string); ok {
@@ -87,6 +99,7 @@ func NewSingpassHandler(cfg config.Config) (*SingpassHandler, error) {
 		}
 	}
 
+	// ID token verifier
 	s.Verifier = provider.Verifier(&oidc.Config{ClientID: cfg.ClientID})
 
 	return s, nil
