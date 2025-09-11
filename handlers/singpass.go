@@ -22,6 +22,7 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/lestrrat-go/jwx/v2/jwa"
 	"github.com/lestrrat-go/jwx/v2/jwe"
+	"github.com/lestrrat-go/jwx/v2/jws"
 	jose "github.com/square/go-jose/v3"
 )
 
@@ -446,8 +447,38 @@ func (h *SingpassHandler) UserinfoJWSHandler(c *gin.Context) {
 		})
 		return
 	}
+}
 
-	c.JSON(http.StatusOK, gin.H{
-		"claims": claims,
-	})
+func (h *SingpassHandler) VerifyInfoJWSHandler(c *gin.Context) {
+	var body struct {
+		Token string `json:"token"`
+	}
+
+	// Bind JSON payload
+	if err := c.BindJSON(&body); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "missing token"})
+		return
+	}
+	token := strings.TrimSpace(body.Token)
+	if token == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "empty token"})
+		return
+	}
+
+	// Verify the JWS using the public key
+	verified, err := jws.Verify([]byte(token), jws.WithKey(jwa.ES256, h.PublicJWS.Key))
+	if err != nil {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "failed to verify JWS", "detail": err.Error()})
+		return
+	}
+
+	// Extract claims
+	var claims map[string]interface{}
+	if err := json.Unmarshal(verified, &claims); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "invalid JSON payload", "detail": err.Error()})
+		return
+	}
+
+	// Return claims
+	c.JSON(http.StatusOK, gin.H{"claims": claims})
 }

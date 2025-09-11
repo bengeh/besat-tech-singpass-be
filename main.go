@@ -46,6 +46,7 @@ func main() {
 	r.GET("/callback", handler.Callback)
 	r.GET("/userinfo", handler.Userinfo)
 	r.POST("/userinfojwe", handler.UserinfoJWSHandler)
+	r.POST("/verifyinfojws", handler.verifyJWS)
 	r.POST("/decrypt", handler.DecryptJWEHandler)
 
 	log.Printf("listening :8080")
