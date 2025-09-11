@@ -4,7 +4,7 @@
             "kty": "EC",
             "use": "sig",
             "crv": "P-256",
-            "kid": "sig-2025-09-05T22:45:00Z",
+            "kid": "alias/stg-sp-auth-api-id-token-signing-key-kms-asymmetric-key-alias",
             "x": "UR8n58KiO1zcLQlYtNnGU3Kx9N2isIykELzXpjJLNYM",
             "y": "SNLnI9NF5NwKm-C8sg9Yv84r5GilM1DW054krbRdAJ4",
             "alg": "ES256"
