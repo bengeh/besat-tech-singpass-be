@@ -407,15 +407,19 @@ func (h *SingpassHandler) UserinfoJWEHandler(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "missing token"})
 		return
 	}
-	jweToken := body.Token
+	jweToken := strings.TrimSpace(body.Token)
 
-	// Cast algorithm string from config into jwa.KeyAlgorithm
+	if jweToken == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "empty token"})
+		return
+	}
+
+	fmt.Printf("Incoming JWE: %s", jweToken)
+
 	// Decrypt outer JWE -> inner JWS
-	alg := jwa.KeyAlgorithmFrom(h.PrivateEnc.Algorithm)
-
 	decrypted, err := jwe.Decrypt(
 		[]byte(jweToken),
-		jwe.WithKey(alg, h.PrivateEnc.Key),
+		jwe.WithKey(jwa.ECDH_ES, h.PrivateEnc.Key), // or jwa.RSA_OAEP_256 depending on Singpass
 	)
 	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "failed to decrypt JWE", "detail": err.Error()})
@@ -435,7 +439,5 @@ func (h *SingpassHandler) UserinfoJWEHandler(c *gin.Context) {
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{
-		"claims": claims,
-	})
+	c.JSON(http.StatusOK, gin.H{"claims": claims})
 }
