@@ -48,3 +48,19 @@ func LoadJWKSetFromFile(path string) (jose.JSONWebKeySet, error) {
 	}
 	return set, nil
 }
+
+// LoadPrivateJWKFromFile loads a private JWK (sig or enc) from a JSON file
+func LoadPrivateJWKFromFile(path string) (jose.JSONWebKey, error) {
+	f, err := os.Open(path)
+	if err != nil {
+		return jose.JSONWebKey{}, fmt.Errorf("open file: %w", err)
+	}
+	defer f.Close()
+
+	var key jose.JSONWebKey
+	if err := json.NewDecoder(f).Decode(&key); err != nil {
+		return jose.JSONWebKey{}, fmt.Errorf("decode JWK: %w", err)
+	}
+
+	return key, nil
+}
