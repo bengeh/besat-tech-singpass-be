@@ -453,8 +453,6 @@ func (h *SingpassHandler) VerifyInfoJWSHandler(c *gin.Context) {
 	var body struct {
 		Token string `json:"token"`
 	}
-
-	// Bind JSON payload
 	if err := c.BindJSON(&body); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "missing token"})
 		return
@@ -465,20 +463,40 @@ func (h *SingpassHandler) VerifyInfoJWSHandler(c *gin.Context) {
 		return
 	}
 
-	// Verify the JWS using the public key
-	verified, err := jws.Verify([]byte(token), jws.WithKey(jwa.ES256, h.PublicJWS.Key))
+	// Parse JWS to get header and kid
+	msg, err := jws.ParseString(token)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid JWS", "detail": err.Error()})
+		return
+	}
+	kid := msg.Signatures()[0].ProtectedHeaders().KeyID()
+
+	// Find matching key in JWKS
+	var pubKey *jose.JSONWebKey
+	for _, k := range h.PublicJWKS.Keys {
+		if k.KeyID == kid {
+			pubKey = &k
+			break
+		}
+	}
+	if pubKey == nil {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "no matching key for kid", "kid": kid})
+		return
+	}
+
+	// Verify with the correct key
+	payload, err := jws.Verify([]byte(token), jws.WithKey(jwa.ES256, pubKey.Key))
 	if err != nil {
 		c.JSON(http.StatusUnauthorized, gin.H{"error": "failed to verify JWS", "detail": err.Error()})
 		return
 	}
 
-	// Extract claims
+	// Parse claims
 	var claims map[string]interface{}
-	if err := json.Unmarshal(verified, &claims); err != nil {
+	if err := json.Unmarshal(payload, &claims); err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "invalid JSON payload", "detail": err.Error()})
 		return
 	}
 
-	// Return claims
 	c.JSON(http.StatusOK, gin.H{"claims": claims})
 }
