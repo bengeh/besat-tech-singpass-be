@@ -16,6 +16,7 @@ import (
 
 	"beast-tech-singpass-be/config"
 	"beast-tech-singpass-be/helpers"
+	"beast-tech-singpass-be/utils"
 
 	"github.com/coreos/go-oidc/v3/oidc"
 	"github.com/gin-contrib/sessions"
@@ -499,4 +500,26 @@ func (h *SingpassHandler) VerifyInfoJWSHandler(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusOK, gin.H{"claims": claims})
+}
+
+func (h *SingpassHandler) DecodeOnly(c *gin.Context) {
+	var req struct {
+		Token string `json:"token"`
+	}
+
+	if err := c.BindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid request", "detail": err.Error()})
+		return
+	}
+
+	header, payload, err := utils.DecodeJWT(req.Token)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "failed to decode JWT", "detail": err.Error()})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"header":  header,
+		"payload": payload,
+	})
 }
